@@ -1,0 +1,82 @@
+#!/usr/bin/env zsh
+
+#
+# 1% inspiration and 99% perspiration" (Thomas Alvas Edison)
+#
+
+# parameter passing - Check number of arguments passed to a Bash script - Stack Overflow
+# https://stackoverflow.com/questions/18568706/check-number-of-arguments-passed-to-a-bash-script
+if [ "$#" -ne 1 ]; then
+    cat << EOF
+Usage:
+    sld2md FILE 
+EOF
+    exit 1
+fi
+
+pdf_file=$1
+slug="$(slugify $(basename ${pdf_file%.pdf}))"
+mkdir -p $slug
+info="$slug/info.yaml"
+pdfinfo $pdf_file > $info
+num_pages=$(egrep '^Pages:' $info | cut -d: -f2 | sed 's/ //g')
+pdfpages=$slug/pdfpages
+mkdir -p $pdfpages
+
+# variables - Length of string in bash - Stack Overflow
+# https://stackoverflow.com/questions/17368067/length-of-string-in-bash
+len_n_pgs=${#num_pages}
+pdfseparate $pdf_file ${pdfpages}/page-%0${len_n_pgs}d.pdf
+
+pdftexts=$slug/txtpages
+mkdir -p $pdftexts
+
+# Enter directory
+cd -q $pdfpages
+for pg in *.pdf
+  do
+    pdftotext -layout $pg ../txtpages/${pg%.pdf}.txt
+  done
+# Leave directory
+cd -q -
+
+pdfimgs=$slug/imgpages
+mkdir -p $pdfimgs
+pdftoppm -png "${pdf_file}" ${pdfimgs}/page
+
+pdfmds=$slug/mdpages
+mkdir -p ${pdfmds}/images/
+
+# linux - How to zero-pad numeric variables in zsh (and maybe also bash?) - Stack Overflow
+# https://stackoverflow.com/questions/9716020/how-to-zero-pad-numeric-variables-in-zsh-and-maybe-also-bash
+# In zsh, we could do this for zero-padding a numeric variable: ${(l(${#num_pages})(0))i}
+for i in $(seq -w 1 ${num_pages})
+  do
+    pg_fname="page-${i}"
+    cp "${pdfimgs}/${pg_fname}.png" ${pdfmds}/images/
+    img_name="images/${pg_fname}.png"
+    txt_cont=$(cat "${pdftexts}/${pg_fname}.txt")
+    cat << EOF > "${pdfmds}/${pg_fname}.md"
+# Página ${i} 
+
+![Slide ${i}](${img_name})
+
+
+## Transcrição do slide
+
+
+${txt_cont}
+
+
+EOF
+  done
+
+# \`\`\`
+
+
+## The following commands were used in the sample <network-fundamentals.pdf>, from University of Oregon
+# sed -i 's/\(●\|–\)/-/' page-*.md
+
+# bash - How to replace an entire line in a text file by line number - Stack Overflow
+# https://stackoverflow.com/questions/11145270/how-to-replace-an-entire-line-in-a-text-file-by-line-number
+# for arq in page-*.md; do sed -i '9s/^[ ]*/### /' $arq; done
