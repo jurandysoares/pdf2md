@@ -1,3 +1,3 @@
-# sld2md
+# pdf2md
 
-An Slide to Markdown command.
+A PDF to Markdown converser.
